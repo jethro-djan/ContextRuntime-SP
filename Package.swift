@@ -8,8 +8,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "ContextRuntime",
-            url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.17/ContextRuntime.xcframework.zip",
-            checksum: "6f34bef3de9b0fb4d8a98b2acca2afd25ef20029fca3072af01941eeafc7a477"
+            url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.18/ContextRuntime.xcframework.zip",
+            checksum: "130cd31053d4ea1c40ba7eb31b79ac737095fc702fd644ba9e166281a7de7ced"
         )
     ]
 )
