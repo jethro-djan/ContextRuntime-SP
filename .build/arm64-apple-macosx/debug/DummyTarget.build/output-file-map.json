@@ -1,0 +1,11 @@
+{
+  "": {
+    "swift-dependencies": "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/.build/arm64-apple-macosx/debug/DummyTarget.build/master.swiftdeps"
+  },
+  "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/Sources/DummyTarget/Dummy.swift": {
+    "dependencies": "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/.build/arm64-apple-macosx/debug/DummyTarget.build/Dummy.d",
+    "object": "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/.build/arm64-apple-macosx/debug/DummyTarget.build/Dummy.swift.o",
+    "swiftmodule": "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/.build/arm64-apple-macosx/debug/DummyTarget.build/Dummy~partial.swiftmodule",
+    "swift-dependencies": "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/.build/arm64-apple-macosx/debug/DummyTarget.build/Dummy.swiftdeps"
+  }
+}

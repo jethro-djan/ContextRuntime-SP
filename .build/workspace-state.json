@@ -1,0 +1,29 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : "xcframework",
+        "packageRef" : {
+          "identity" : "contextruntime-sp",
+          "kind" : "root",
+          "location" : "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP",
+          "name" : "ContextRuntime-SP"
+        },
+        "path" : "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/.build/artifacts/contextruntime-sp/ContextRuntime/ContextRuntime.xcframework",
+        "source" : {
+          "checksum" : "130cd31053d4ea1c40ba7eb31b79ac737095fc702fd644ba9e166281a7de7ced",
+          "type" : "remote",
+          "url" : "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.18/ContextRuntime.xcframework.zip"
+        },
+        "targetName" : "ContextRuntime"
+      }
+    ],
+    "dependencies" : [
+
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}
