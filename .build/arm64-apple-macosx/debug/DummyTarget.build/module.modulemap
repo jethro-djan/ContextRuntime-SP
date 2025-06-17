@@ -1,4 +1,0 @@
-module DummyTarget {
-    header "/Users/jethro-world/Documents/projects-local/ContextRuntime-SP/.build/arm64-apple-macosx/debug/DummyTarget.build/DummyTarget-Swift.h"
-    requires objc
-}
