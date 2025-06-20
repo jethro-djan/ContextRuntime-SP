@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "ContextRuntime",
+    name: "ContextFFI",
     platforms: [.iOS(.v16)],
-    products: [.library(name: "ContextRuntime", targets: ["ContextRuntime"])],
+    products: [.library(name: "ContextFFI", targets: ["ContextFFI"])],
     targets: [
         .binaryTarget(
-            name: "ContextRuntime",
-            url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.22/ContextRuntime.xcframework.zip",
-            checksum: "84a0c909fdb3181984d6c537b3eac60eb27b93cf47eea39c18ff41f4c5440dbd"
+            name: "ContextFFI",
+            url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.23/ContextFFI.xcframework.zip",
+            checksum: "37646d73f8be16ac6820af78583dca90c4a2ed9299b7ed54e51dc7865b8d04f3"
         )
     ]
 )
