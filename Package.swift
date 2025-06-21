@@ -1,15 +1,29 @@
-// swift-tools-version:5.9
-import PackageDescription
+// swift-tools-version:5.5
+// The swift-tools-version declares the minimum version of Swift required to build this package.
+// Swift Package: ContextRuntime
+
+import PackageDescription;
 
 let package = Package(
-    name: "ContextFFI",
-    platforms: [.iOS(.v16)],
-    products: [.library(name: "ContextFFI", targets: ["ContextFFI"])],
-    targets: [
-        .binaryTarget(
-            name: "ContextFFI",
-            url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.23/ContextFFI.xcframework.zip",
-            checksum: "37646d73f8be16ac6820af78583dca90c4a2ed9299b7ed54e51dc7865b8d04f3"
+    name: "ContextRuntime",
+    platforms: [
+        .iOS(.v13),
+        .macOS(.v10_15)
+    ],
+    products: [
+        .library(
+            name: "ContextRuntime",
+            targets: ["ContextRuntime"]
         )
+    ],
+    dependencies: [ ],
+    targets: [
+        .binaryTarget(name: "ContextFFI", url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.25/ContextFFI.xcframework.zip", checksum: "1f01caf7e82b18c888017d969019b9bdf1126c0c5c5bf8315582357052be21fb"),
+        .target(
+            name: "ContextRuntime",
+            dependencies: [
+                .target(name: "ContextFFI")
+            ]
+        ),
     ]
 )
