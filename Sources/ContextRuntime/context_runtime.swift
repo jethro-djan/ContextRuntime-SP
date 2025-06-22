@@ -7,8 +7,8 @@ import Foundation
 // Depending on the consumer's build setup, the low-level FFI code
 // might be in a separate module, or it might be compiled inline into
 // this module. This is a bit of light hackery to work with both.
-#if canImport(ctxruntimeFFI)
-import ctxruntimeFFI
+#if canImport(context_runtimeFFI)
+import context_runtimeFFI
 #endif
 
 fileprivate extension RustBuffer {
@@ -25,13 +25,13 @@ fileprivate extension RustBuffer {
     }
 
     static func from(_ ptr: UnsafeBufferPointer<UInt8>) -> RustBuffer {
-        try! rustCall { ffi_ctxruntime_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
+        try! rustCall { ffi_context_runtime_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
     }
 
     // Frees the buffer in place.
     // The buffer must not be used after this is called.
     func deallocate() {
-        try! rustCall { ffi_ctxruntime_rustbuffer_free(self, $0) }
+        try! rustCall { ffi_context_runtime_rustbuffer_free(self, $0) }
     }
 }
 
@@ -281,7 +281,7 @@ private func makeRustCall<T, E: Swift.Error>(
     _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T,
     errorHandler: ((RustBuffer) throws -> E)?
 ) throws -> T {
-    uniffiEnsureCtxruntimeInitialized()
+    uniffiEnsureContextRuntimeInitialized()
     var callStatus = RustCallStatus.init()
     let returnedVal = callback(&callStatus)
     try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: errorHandler)
@@ -535,12 +535,12 @@ open class ContextRuntimeHandle: ContextRuntimeHandleProtocol, @unchecked Sendab
     @_documentation(visibility: private)
 #endif
     public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_ctxruntime_fn_clone_contextruntimehandle(self.pointer, $0) }
+        return try! rustCall { uniffi_context_runtime_fn_clone_contextruntimehandle(self.pointer, $0) }
     }
 public convenience init() {
     let pointer =
         try! rustCall() {
-    uniffi_ctxruntime_fn_constructor_contextruntimehandle_new($0
+    uniffi_context_runtime_fn_constructor_contextruntimehandle_new($0
     )
 }
     self.init(unsafeFromRawPointer: pointer)
@@ -551,14 +551,14 @@ public convenience init() {
             return
         }
 
-        try! rustCall { uniffi_ctxruntime_fn_free_contextruntimehandle(pointer, $0) }
+        try! rustCall { uniffi_context_runtime_fn_free_contextruntimehandle(pointer, $0) }
     }
 
     
 
     
 open func close(uri: String)  {try! rustCall() {
-    uniffi_ctxruntime_fn_method_contextruntimehandle_close(self.uniffiClonePointer(),
+    uniffi_context_runtime_fn_method_contextruntimehandle_close(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),$0
     )
 }
@@ -566,7 +566,7 @@ open func close(uri: String)  {try! rustCall() {
     
 open func compile(uri: String) -> CompileResultFfi  {
     return try!  FfiConverterTypeCompileResultFfi_lift(try! rustCall() {
-    uniffi_ctxruntime_fn_method_contextruntimehandle_compile(self.uniffiClonePointer(),
+    uniffi_context_runtime_fn_method_contextruntimehandle_compile(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),$0
     )
 })
@@ -574,7 +574,7 @@ open func compile(uri: String) -> CompileResultFfi  {
     
 open func getDiagnostics(uri: String) -> [DiagnosticFfi]  {
     return try!  FfiConverterSequenceTypeDiagnosticFfi.lift(try! rustCall() {
-    uniffi_ctxruntime_fn_method_contextruntimehandle_get_diagnostics(self.uniffiClonePointer(),
+    uniffi_context_runtime_fn_method_contextruntimehandle_get_diagnostics(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),$0
     )
 })
@@ -582,7 +582,7 @@ open func getDiagnostics(uri: String) -> [DiagnosticFfi]  {
     
 open func getDocumentSource(uri: String) -> String?  {
     return try!  FfiConverterOptionString.lift(try! rustCall() {
-    uniffi_ctxruntime_fn_method_contextruntimehandle_get_document_source(self.uniffiClonePointer(),
+    uniffi_context_runtime_fn_method_contextruntimehandle_get_document_source(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),$0
     )
 })
@@ -590,7 +590,7 @@ open func getDocumentSource(uri: String) -> String?  {
     
 open func getHighlights(uri: String) -> [HighlightFfi]  {
     return try!  FfiConverterSequenceTypeHighlightFfi.lift(try! rustCall() {
-    uniffi_ctxruntime_fn_method_contextruntimehandle_get_highlights(self.uniffiClonePointer(),
+    uniffi_context_runtime_fn_method_contextruntimehandle_get_highlights(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),$0
     )
 })
@@ -598,7 +598,7 @@ open func getHighlights(uri: String) -> [HighlightFfi]  {
     
 open func `open`(uri: String, text: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_ctxruntime_fn_method_contextruntimehandle_open(self.uniffiClonePointer(),
+    uniffi_context_runtime_fn_method_contextruntimehandle_open(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),
         FfiConverterString.lower(text),$0
     )
@@ -607,7 +607,7 @@ open func `open`(uri: String, text: String) -> Bool  {
     
 open func update(uri: String, text: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_ctxruntime_fn_method_contextruntimehandle_update(self.uniffiClonePointer(),
+    uniffi_context_runtime_fn_method_contextruntimehandle_update(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),
         FfiConverterString.lower(text),$0
     )
@@ -1074,32 +1074,32 @@ private let initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
     let bindings_contract_version = 29
     // Get the scaffolding contract version by calling the into the dylib
-    let scaffolding_contract_version = ffi_ctxruntime_uniffi_contract_version()
+    let scaffolding_contract_version = ffi_context_runtime_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_ctxruntime_checksum_method_contextruntimehandle_close() != 3578) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_close() != 33503) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ctxruntime_checksum_method_contextruntimehandle_compile() != 47935) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_compile() != 37782) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ctxruntime_checksum_method_contextruntimehandle_get_diagnostics() != 65322) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_diagnostics() != 12217) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ctxruntime_checksum_method_contextruntimehandle_get_document_source() != 57467) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_document_source() != 44195) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ctxruntime_checksum_method_contextruntimehandle_get_highlights() != 6483) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_highlights() != 5593) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ctxruntime_checksum_method_contextruntimehandle_open() != 44034) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_open() != 36700) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ctxruntime_checksum_method_contextruntimehandle_update() != 23770) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_update() != 53774) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_ctxruntime_checksum_constructor_contextruntimehandle_new() != 62020) {
+    if (uniffi_context_runtime_checksum_constructor_contextruntimehandle_new() != 1461) {
         return InitializationResult.apiChecksumMismatch
     }
 
@@ -1108,7 +1108,7 @@ private let initializationResult: InitializationResult = {
 
 // Make the ensure init function public so that other modules which have external type references to
 // our types can call it.
-public func uniffiEnsureCtxruntimeInitialized() {
+public func uniffiEnsureContextRuntimeInitialized() {
     switch initializationResult {
     case .ok:
         break
