@@ -483,6 +483,12 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol AsyncCompilationFutureProtocol: AnyObject, Sendable {
     
+    func cancel()  -> Bool
+    
+    func isReady()  -> Bool
+    
+    func pollResult()  -> CompileResultFfi?
+    
 }
 open class AsyncCompilationFuture: AsyncCompilationFutureProtocol, @unchecked Sendable {
     fileprivate let pointer: UnsafeMutableRawPointer!
@@ -535,6 +541,27 @@ open class AsyncCompilationFuture: AsyncCompilationFutureProtocol, @unchecked Se
 
     
 
+    
+open func cancel() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_asynccompilationfuture_cancel(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func isReady() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_asynccompilationfuture_is_ready(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func pollResult() -> CompileResultFfi?  {
+    return try!  FfiConverterOptionTypeCompileResultFfi.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_asynccompilationfuture_poll_result(self.uniffiClonePointer(),$0
+    )
+})
+}
     
 
 }
@@ -1673,6 +1700,30 @@ fileprivate struct FfiConverterOptionTypeAsyncCompilationFuture: FfiConverterRus
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeCompileResultFfi: FfiConverterRustBuffer {
+    typealias SwiftType = CompileResultFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeCompileResultFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeCompileResultFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionCallbackInterfaceLiveUpdateCallback: FfiConverterRustBuffer {
     typealias SwiftType = LiveUpdateCallback?
 
@@ -1783,6 +1834,15 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_context_runtime_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_cancel() != 36856) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_is_ready() != 17883) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_poll_result() != 53559) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_cancel_compilation() != 33834) {
         return InitializationResult.apiChecksumMismatch
