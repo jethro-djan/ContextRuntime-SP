@@ -416,38 +416,6 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
-    typealias FfiType = UInt64
-    typealias SwiftType = UInt64
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
-        return try lift(readInt(&buf))
-    }
-
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
-    typealias FfiType = Float
-    typealias SwiftType = Float
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Float {
-        return try lift(readFloat(&buf))
-    }
-
-    public static func write(_ value: Float, into buf: inout [UInt8]) {
-        writeFloat(&buf, lower(value))
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -513,16 +481,16 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 
 
-public protocol CompilationCallback: AnyObject, Sendable {
+public protocol AsyncCompilationFutureProtocol: AnyObject, Sendable {
     
-    func onProgress(progress: Float) 
+    func cancel()  -> Bool
     
-    func onCompilationComplete(result: CompileResultFfi) 
+    func isReady()  -> Bool
     
-    func onError(error: RuntimeErrorFfi) 
+    func pollResult()  -> CompileResultFfi?
     
 }
-open class CompilationCallbackImpl: CompilationCallback, @unchecked Sendable {
+open class AsyncCompilationFuture: AsyncCompilationFutureProtocol, @unchecked Sendable {
     fileprivate let pointer: UnsafeMutableRawPointer!
 
     /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
@@ -559,7 +527,7 @@ open class CompilationCallbackImpl: CompilationCallback, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_context_runtime_fn_clone_compilationcallback(self.pointer, $0) }
+        return try! rustCall { uniffi_context_runtime_fn_clone_asynccompilationfuture(self.pointer, $0) }
     }
     // No primary constructor declared for this class.
 
@@ -568,159 +536,54 @@ open class CompilationCallbackImpl: CompilationCallback, @unchecked Sendable {
             return
         }
 
-        try! rustCall { uniffi_context_runtime_fn_free_compilationcallback(pointer, $0) }
+        try! rustCall { uniffi_context_runtime_fn_free_asynccompilationfuture(pointer, $0) }
     }
 
     
 
     
-open func onProgress(progress: Float)  {try! rustCall() {
-    uniffi_context_runtime_fn_method_compilationcallback_on_progress(self.uniffiClonePointer(),
-        FfiConverterFloat.lower(progress),$0
+open func cancel() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_asynccompilationfuture_cancel(self.uniffiClonePointer(),$0
     )
-}
+})
 }
     
-open func onCompilationComplete(result: CompileResultFfi)  {try! rustCall() {
-    uniffi_context_runtime_fn_method_compilationcallback_on_compilation_complete(self.uniffiClonePointer(),
-        FfiConverterTypeCompileResultFfi_lower(result),$0
+open func isReady() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_asynccompilationfuture_is_ready(self.uniffiClonePointer(),$0
     )
-}
+})
 }
     
-open func onError(error: RuntimeErrorFfi)  {try! rustCall() {
-    uniffi_context_runtime_fn_method_compilationcallback_on_error(self.uniffiClonePointer(),
-        FfiConverterTypeRuntimeErrorFfi_lower(error),$0
+open func pollResult() -> CompileResultFfi?  {
+    return try!  FfiConverterOptionTypeCompileResultFfi.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_asynccompilationfuture_poll_result(self.uniffiClonePointer(),$0
     )
-}
+})
 }
     
 
-}
-// Magic number for the Rust proxy to call using the same mechanism as every other method,
-// to free the callback once it's dropped by Rust.
-private let IDX_CALLBACK_FREE: Int32 = 0
-// Callback return codes
-private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
-private let UNIFFI_CALLBACK_ERROR: Int32 = 1
-private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceCompilationCallback {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // This creates 1-element array, since this seems to be the only way to construct a const
-    // pointer that we can pass to the Rust code.
-    static let vtable: [UniffiVTableCallbackInterfaceCompilationCallback] = [UniffiVTableCallbackInterfaceCompilationCallback(
-        onProgress: { (
-            uniffiHandle: UInt64,
-            progress: Float,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeCompilationCallback.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.onProgress(
-                     progress: try FfiConverterFloat.lift(progress)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        onCompilationComplete: { (
-            uniffiHandle: UInt64,
-            result: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeCompilationCallback.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.onCompilationComplete(
-                     result: try FfiConverterTypeCompileResultFfi_lift(result)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        onError: { (
-            uniffiHandle: UInt64,
-            error: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeCompilationCallback.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.onError(
-                     error: try FfiConverterTypeRuntimeErrorFfi_lift(error)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            let result = try? FfiConverterTypeCompilationCallback.handleMap.remove(handle: uniffiHandle)
-            if result == nil {
-                print("Uniffi callback interface CompilationCallback: handle missing in uniffiFree")
-            }
-        }
-    )]
-}
-
-private func uniffiCallbackInitCompilationCallback() {
-    uniffi_context_runtime_fn_init_callback_vtable_compilationcallback(UniffiCallbackInterfaceCompilationCallback.vtable)
 }
 
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeCompilationCallback: FfiConverter {
-    fileprivate static let handleMap = UniffiHandleMap<CompilationCallback>()
+public struct FfiConverterTypeAsyncCompilationFuture: FfiConverter {
 
     typealias FfiType = UnsafeMutableRawPointer
-    typealias SwiftType = CompilationCallback
+    typealias SwiftType = AsyncCompilationFuture
 
-    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> CompilationCallback {
-        return CompilationCallbackImpl(unsafeFromRawPointer: pointer)
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> AsyncCompilationFuture {
+        return AsyncCompilationFuture(unsafeFromRawPointer: pointer)
     }
 
-    public static func lower(_ value: CompilationCallback) -> UnsafeMutableRawPointer {
-        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
-            fatalError("Cast to UnsafeMutableRawPointer failed")
-        }
-        return ptr
+    public static func lower(_ value: AsyncCompilationFuture) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompilationCallback {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AsyncCompilationFuture {
         let v: UInt64 = try readInt(&buf)
         // The Rust code won't compile if a pointer won't fit in a UInt64.
         // We have to go via `UInt` because that's the thing that's the size of a pointer.
@@ -731,7 +594,7 @@ public struct FfiConverterTypeCompilationCallback: FfiConverter {
         return try lift(ptr!)
     }
 
-    public static func write(_ value: CompilationCallback, into buf: inout [UInt8]) {
+    public static func write(_ value: AsyncCompilationFuture, into buf: inout [UInt8]) {
         // This fiddling is because `Int` is the thing that's the same size as a pointer.
         // The Rust code won't compile if a pointer won't fit in a `UInt64`.
         writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
@@ -742,15 +605,15 @@ public struct FfiConverterTypeCompilationCallback: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeCompilationCallback_lift(_ pointer: UnsafeMutableRawPointer) throws -> CompilationCallback {
-    return try FfiConverterTypeCompilationCallback.lift(pointer)
+public func FfiConverterTypeAsyncCompilationFuture_lift(_ pointer: UnsafeMutableRawPointer) throws -> AsyncCompilationFuture {
+    return try FfiConverterTypeAsyncCompilationFuture.lift(pointer)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeCompilationCallback_lower(_ value: CompilationCallback) -> UnsafeMutableRawPointer {
-    return FfiConverterTypeCompilationCallback.lower(value)
+public func FfiConverterTypeAsyncCompilationFuture_lower(_ value: AsyncCompilationFuture) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeAsyncCompilationFuture.lower(value)
 }
 
 
@@ -764,29 +627,29 @@ public protocol ContextRuntimeHandleProtocol: AnyObject, Sendable {
     
     func close(uri: String) 
     
-    func compile(uri: String, callback: CompilationCallback?)  -> String
+    func compile(uri: String)  -> String
     
-    func contextExecutableExists()  -> Bool
-    
-    func getContextExecutablePath()  -> String
+    func getActiveJobs()  -> [String]
     
     func getDiagnostics(uri: String)  -> [DiagnosticFfi]
     
     func getDocumentSource(uri: String)  -> String?
     
+    func getDocumentUris()  -> [String]
+    
     func getHighlights(uri: String)  -> [HighlightFfi]
     
-    func `open`(uri: String, text: String)  -> Bool
+    func notifyDiagnosticsUpdated(uri: String, diagnostics: [DiagnosticFfi]) 
     
-    func setContextExecutable(path: String) 
+    func notifyError(error: RuntimeErrorFfi) 
+    
+    func notifyHighlightsUpdated(uri: String, highlights: [HighlightFfi]) 
+    
+    func `open`(uri: String, content: String)  -> Bool
     
     func setLiveCallback(callback: LiveUpdateCallback?) 
     
-    func setWorkingDirectory(path: String) 
-    
-    func shutdown() 
-    
-    func update(uri: String, start: UInt32, end: UInt32, text: String)  -> Bool
+    func update(uri: String, start: UInt32, end: UInt32, newText: String)  -> Bool
     
 }
 open class ContextRuntimeHandle: ContextRuntimeHandleProtocol, @unchecked Sendable {
@@ -846,10 +709,10 @@ public convenience init() {
     }
 
     
-public static func newWithConfig(config: CompilationConfig) -> ContextRuntimeHandle  {
+public static func newWithConfig(config: RuntimeConfigFfi) -> ContextRuntimeHandle  {
     return try!  FfiConverterTypeContextRuntimeHandle_lift(try! rustCall() {
     uniffi_context_runtime_fn_constructor_contextruntimehandle_new_with_config(
-        FfiConverterTypeCompilationConfig_lower(config),$0
+        FfiConverterTypeRuntimeConfigFfi_lower(config),$0
     )
 })
 }
@@ -871,25 +734,17 @@ open func close(uri: String)  {try! rustCall() {
 }
 }
     
-open func compile(uri: String, callback: CompilationCallback?) -> String  {
+open func compile(uri: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_context_runtime_fn_method_contextruntimehandle_compile(self.uniffiClonePointer(),
-        FfiConverterString.lower(uri),
-        FfiConverterOptionTypeCompilationCallback.lower(callback),$0
+        FfiConverterString.lower(uri),$0
     )
 })
 }
     
-open func contextExecutableExists() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_context_runtime_fn_method_contextruntimehandle_context_executable_exists(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-open func getContextExecutablePath() -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_context_runtime_fn_method_contextruntimehandle_get_context_executable_path(self.uniffiClonePointer(),$0
+open func getActiveJobs() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_contextruntimehandle_get_active_jobs(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -910,6 +765,13 @@ open func getDocumentSource(uri: String) -> String?  {
 })
 }
     
+open func getDocumentUris() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_contextruntimehandle_get_document_uris(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
 open func getHighlights(uri: String) -> [HighlightFfi]  {
     return try!  FfiConverterSequenceTypeHighlightFfi.lift(try! rustCall() {
     uniffi_context_runtime_fn_method_contextruntimehandle_get_highlights(self.uniffiClonePointer(),
@@ -918,49 +780,52 @@ open func getHighlights(uri: String) -> [HighlightFfi]  {
 })
 }
     
-open func `open`(uri: String, text: String) -> Bool  {
+open func notifyDiagnosticsUpdated(uri: String, diagnostics: [DiagnosticFfi])  {try! rustCall() {
+    uniffi_context_runtime_fn_method_contextruntimehandle_notify_diagnostics_updated(self.uniffiClonePointer(),
+        FfiConverterString.lower(uri),
+        FfiConverterSequenceTypeDiagnosticFfi.lower(diagnostics),$0
+    )
+}
+}
+    
+open func notifyError(error: RuntimeErrorFfi)  {try! rustCall() {
+    uniffi_context_runtime_fn_method_contextruntimehandle_notify_error(self.uniffiClonePointer(),
+        FfiConverterTypeRuntimeErrorFfi_lower(error),$0
+    )
+}
+}
+    
+open func notifyHighlightsUpdated(uri: String, highlights: [HighlightFfi])  {try! rustCall() {
+    uniffi_context_runtime_fn_method_contextruntimehandle_notify_highlights_updated(self.uniffiClonePointer(),
+        FfiConverterString.lower(uri),
+        FfiConverterSequenceTypeHighlightFfi.lower(highlights),$0
+    )
+}
+}
+    
+open func `open`(uri: String, content: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_context_runtime_fn_method_contextruntimehandle_open(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),
-        FfiConverterString.lower(text),$0
+        FfiConverterString.lower(content),$0
     )
 })
 }
     
-open func setContextExecutable(path: String)  {try! rustCall() {
-    uniffi_context_runtime_fn_method_contextruntimehandle_set_context_executable(self.uniffiClonePointer(),
-        FfiConverterString.lower(path),$0
-    )
-}
-}
-    
 open func setLiveCallback(callback: LiveUpdateCallback?)  {try! rustCall() {
     uniffi_context_runtime_fn_method_contextruntimehandle_set_live_callback(self.uniffiClonePointer(),
-        FfiConverterOptionTypeLiveUpdateCallback.lower(callback),$0
+        FfiConverterOptionCallbackInterfaceLiveUpdateCallback.lower(callback),$0
     )
 }
 }
     
-open func setWorkingDirectory(path: String)  {try! rustCall() {
-    uniffi_context_runtime_fn_method_contextruntimehandle_set_working_directory(self.uniffiClonePointer(),
-        FfiConverterString.lower(path),$0
-    )
-}
-}
-    
-open func shutdown()  {try! rustCall() {
-    uniffi_context_runtime_fn_method_contextruntimehandle_shutdown(self.uniffiClonePointer(),$0
-    )
-}
-}
-    
-open func update(uri: String, start: UInt32, end: UInt32, text: String) -> Bool  {
+open func update(uri: String, start: UInt32, end: UInt32, newText: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_context_runtime_fn_method_contextruntimehandle_update(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),
         FfiConverterUInt32.lower(start),
         FfiConverterUInt32.lower(end),
-        FfiConverterString.lower(text),$0
+        FfiConverterString.lower(newText),$0
     )
 })
 }
@@ -1021,352 +886,19 @@ public func FfiConverterTypeContextRuntimeHandle_lower(_ value: ContextRuntimeHa
 
 
 
-
-
-public protocol LiveUpdateCallback: AnyObject, Sendable {
-    
-    func onDiagnosticsUpdated(uri: String, diagnostics: [DiagnosticFfi]) 
-    
-    func onHighlightsUpdated(uri: String, highlights: [HighlightFfi]) 
-    
-    func onError(error: RuntimeErrorFfi) 
-    
-}
-open class LiveUpdateCallbackImpl: LiveUpdateCallback, @unchecked Sendable {
-    fileprivate let pointer: UnsafeMutableRawPointer!
-
-    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoPointer {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
-        self.pointer = pointer
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noPointer: NoPointer) {
-        self.pointer = nil
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_context_runtime_fn_clone_liveupdatecallback(self.pointer, $0) }
-    }
-    // No primary constructor declared for this class.
-
-    deinit {
-        guard let pointer = pointer else {
-            return
-        }
-
-        try! rustCall { uniffi_context_runtime_fn_free_liveupdatecallback(pointer, $0) }
-    }
-
-    
-
-    
-open func onDiagnosticsUpdated(uri: String, diagnostics: [DiagnosticFfi])  {try! rustCall() {
-    uniffi_context_runtime_fn_method_liveupdatecallback_on_diagnostics_updated(self.uniffiClonePointer(),
-        FfiConverterString.lower(uri),
-        FfiConverterSequenceTypeDiagnosticFfi.lower(diagnostics),$0
-    )
-}
-}
-    
-open func onHighlightsUpdated(uri: String, highlights: [HighlightFfi])  {try! rustCall() {
-    uniffi_context_runtime_fn_method_liveupdatecallback_on_highlights_updated(self.uniffiClonePointer(),
-        FfiConverterString.lower(uri),
-        FfiConverterSequenceTypeHighlightFfi.lower(highlights),$0
-    )
-}
-}
-    
-open func onError(error: RuntimeErrorFfi)  {try! rustCall() {
-    uniffi_context_runtime_fn_method_liveupdatecallback_on_error(self.uniffiClonePointer(),
-        FfiConverterTypeRuntimeErrorFfi_lower(error),$0
-    )
-}
-}
-    
-
-}
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceLiveUpdateCallback {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // This creates 1-element array, since this seems to be the only way to construct a const
-    // pointer that we can pass to the Rust code.
-    static let vtable: [UniffiVTableCallbackInterfaceLiveUpdateCallback] = [UniffiVTableCallbackInterfaceLiveUpdateCallback(
-        onDiagnosticsUpdated: { (
-            uniffiHandle: UInt64,
-            uri: RustBuffer,
-            diagnostics: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeLiveUpdateCallback.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.onDiagnosticsUpdated(
-                     uri: try FfiConverterString.lift(uri),
-                     diagnostics: try FfiConverterSequenceTypeDiagnosticFfi.lift(diagnostics)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        onHighlightsUpdated: { (
-            uniffiHandle: UInt64,
-            uri: RustBuffer,
-            highlights: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeLiveUpdateCallback.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.onHighlightsUpdated(
-                     uri: try FfiConverterString.lift(uri),
-                     highlights: try FfiConverterSequenceTypeHighlightFfi.lift(highlights)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        onError: { (
-            uniffiHandle: UInt64,
-            error: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeLiveUpdateCallback.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.onError(
-                     error: try FfiConverterTypeRuntimeErrorFfi_lift(error)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            let result = try? FfiConverterTypeLiveUpdateCallback.handleMap.remove(handle: uniffiHandle)
-            if result == nil {
-                print("Uniffi callback interface LiveUpdateCallback: handle missing in uniffiFree")
-            }
-        }
-    )]
-}
-
-private func uniffiCallbackInitLiveUpdateCallback() {
-    uniffi_context_runtime_fn_init_callback_vtable_liveupdatecallback(UniffiCallbackInterfaceLiveUpdateCallback.vtable)
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeLiveUpdateCallback: FfiConverter {
-    fileprivate static let handleMap = UniffiHandleMap<LiveUpdateCallback>()
-
-    typealias FfiType = UnsafeMutableRawPointer
-    typealias SwiftType = LiveUpdateCallback
-
-    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> LiveUpdateCallback {
-        return LiveUpdateCallbackImpl(unsafeFromRawPointer: pointer)
-    }
-
-    public static func lower(_ value: LiveUpdateCallback) -> UnsafeMutableRawPointer {
-        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
-            fatalError("Cast to UnsafeMutableRawPointer failed")
-        }
-        return ptr
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LiveUpdateCallback {
-        let v: UInt64 = try readInt(&buf)
-        // The Rust code won't compile if a pointer won't fit in a UInt64.
-        // We have to go via `UInt` because that's the thing that's the size of a pointer.
-        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
-        if (ptr == nil) {
-            throw UniffiInternalError.unexpectedNullPointer
-        }
-        return try lift(ptr!)
-    }
-
-    public static func write(_ value: LiveUpdateCallback, into buf: inout [UInt8]) {
-        // This fiddling is because `Int` is the thing that's the same size as a pointer.
-        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
-        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeLiveUpdateCallback_lift(_ pointer: UnsafeMutableRawPointer) throws -> LiveUpdateCallback {
-    return try FfiConverterTypeLiveUpdateCallback.lift(pointer)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeLiveUpdateCallback_lower(_ value: LiveUpdateCallback) -> UnsafeMutableRawPointer {
-    return FfiConverterTypeLiveUpdateCallback.lower(value)
-}
-
-
-
-
-public struct CompilationConfig {
-    public var backend: CompilationBackend
-    public var timeoutSeconds: UInt64
-    public var authToken: String?
-    public var remoteHeaders: [String: String]?
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(backend: CompilationBackend, timeoutSeconds: UInt64, authToken: String?, remoteHeaders: [String: String]?) {
-        self.backend = backend
-        self.timeoutSeconds = timeoutSeconds
-        self.authToken = authToken
-        self.remoteHeaders = remoteHeaders
-    }
-}
-
-#if compiler(>=6)
-extension CompilationConfig: Sendable {}
-#endif
-
-
-extension CompilationConfig: Equatable, Hashable {
-    public static func ==(lhs: CompilationConfig, rhs: CompilationConfig) -> Bool {
-        if lhs.backend != rhs.backend {
-            return false
-        }
-        if lhs.timeoutSeconds != rhs.timeoutSeconds {
-            return false
-        }
-        if lhs.authToken != rhs.authToken {
-            return false
-        }
-        if lhs.remoteHeaders != rhs.remoteHeaders {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(backend)
-        hasher.combine(timeoutSeconds)
-        hasher.combine(authToken)
-        hasher.combine(remoteHeaders)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCompilationConfig: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompilationConfig {
-        return
-            try CompilationConfig(
-                backend: FfiConverterTypeCompilationBackend.read(from: &buf), 
-                timeoutSeconds: FfiConverterUInt64.read(from: &buf), 
-                authToken: FfiConverterOptionString.read(from: &buf), 
-                remoteHeaders: FfiConverterOptionDictionaryStringString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: CompilationConfig, into buf: inout [UInt8]) {
-        FfiConverterTypeCompilationBackend.write(value.backend, into: &buf)
-        FfiConverterUInt64.write(value.timeoutSeconds, into: &buf)
-        FfiConverterOptionString.write(value.authToken, into: &buf)
-        FfiConverterOptionDictionaryStringString.write(value.remoteHeaders, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompilationConfig_lift(_ buf: RustBuffer) throws -> CompilationConfig {
-    return try FfiConverterTypeCompilationConfig.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompilationConfig_lower(_ value: CompilationConfig) -> RustBuffer {
-    return FfiConverterTypeCompilationConfig.lower(value)
-}
-
-
 public struct CompileResultFfi {
     public var success: Bool
     public var pdfPath: String?
     public var log: String
-    public var errors: [DiagnosticFfi]
-    public var warnings: [DiagnosticFfi]
+    public var diagnostics: [DiagnosticFfi]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(success: Bool, pdfPath: String?, log: String, errors: [DiagnosticFfi], warnings: [DiagnosticFfi]) {
+    public init(success: Bool, pdfPath: String?, log: String, diagnostics: [DiagnosticFfi]) {
         self.success = success
         self.pdfPath = pdfPath
         self.log = log
-        self.errors = errors
-        self.warnings = warnings
+        self.diagnostics = diagnostics
     }
 }
 
@@ -1386,10 +918,7 @@ extension CompileResultFfi: Equatable, Hashable {
         if lhs.log != rhs.log {
             return false
         }
-        if lhs.errors != rhs.errors {
-            return false
-        }
-        if lhs.warnings != rhs.warnings {
+        if lhs.diagnostics != rhs.diagnostics {
             return false
         }
         return true
@@ -1399,8 +928,7 @@ extension CompileResultFfi: Equatable, Hashable {
         hasher.combine(success)
         hasher.combine(pdfPath)
         hasher.combine(log)
-        hasher.combine(errors)
-        hasher.combine(warnings)
+        hasher.combine(diagnostics)
     }
 }
 
@@ -1416,8 +944,7 @@ public struct FfiConverterTypeCompileResultFfi: FfiConverterRustBuffer {
                 success: FfiConverterBool.read(from: &buf), 
                 pdfPath: FfiConverterOptionString.read(from: &buf), 
                 log: FfiConverterString.read(from: &buf), 
-                errors: FfiConverterSequenceTypeDiagnosticFfi.read(from: &buf), 
-                warnings: FfiConverterSequenceTypeDiagnosticFfi.read(from: &buf)
+                diagnostics: FfiConverterSequenceTypeDiagnosticFfi.read(from: &buf)
         )
     }
 
@@ -1425,8 +952,7 @@ public struct FfiConverterTypeCompileResultFfi: FfiConverterRustBuffer {
         FfiConverterBool.write(value.success, into: &buf)
         FfiConverterOptionString.write(value.pdfPath, into: &buf)
         FfiConverterString.write(value.log, into: &buf)
-        FfiConverterSequenceTypeDiagnosticFfi.write(value.errors, into: &buf)
-        FfiConverterSequenceTypeDiagnosticFfi.write(value.warnings, into: &buf)
+        FfiConverterSequenceTypeDiagnosticFfi.write(value.diagnostics, into: &buf)
     }
 }
 
@@ -1447,18 +973,18 @@ public func FfiConverterTypeCompileResultFfi_lower(_ value: CompileResultFfi) ->
 
 
 public struct DiagnosticFfi {
-    public var range: FfiRange
+    public var start: UInt32
+    public var end: UInt32
     public var severity: String
     public var message: String
-    public var source: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(range: FfiRange, severity: String, message: String, source: String) {
-        self.range = range
+    public init(start: UInt32, end: UInt32, severity: String, message: String) {
+        self.start = start
+        self.end = end
         self.severity = severity
         self.message = message
-        self.source = source
     }
 }
 
@@ -1469,7 +995,10 @@ extension DiagnosticFfi: Sendable {}
 
 extension DiagnosticFfi: Equatable, Hashable {
     public static func ==(lhs: DiagnosticFfi, rhs: DiagnosticFfi) -> Bool {
-        if lhs.range != rhs.range {
+        if lhs.start != rhs.start {
+            return false
+        }
+        if lhs.end != rhs.end {
             return false
         }
         if lhs.severity != rhs.severity {
@@ -1478,17 +1007,14 @@ extension DiagnosticFfi: Equatable, Hashable {
         if lhs.message != rhs.message {
             return false
         }
-        if lhs.source != rhs.source {
-            return false
-        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(range)
+        hasher.combine(start)
+        hasher.combine(end)
         hasher.combine(severity)
         hasher.combine(message)
-        hasher.combine(source)
     }
 }
 
@@ -1501,18 +1027,18 @@ public struct FfiConverterTypeDiagnosticFfi: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DiagnosticFfi {
         return
             try DiagnosticFfi(
-                range: FfiConverterTypeFfiRange.read(from: &buf), 
+                start: FfiConverterUInt32.read(from: &buf), 
+                end: FfiConverterUInt32.read(from: &buf), 
                 severity: FfiConverterString.read(from: &buf), 
-                message: FfiConverterString.read(from: &buf), 
-                source: FfiConverterString.read(from: &buf)
+                message: FfiConverterString.read(from: &buf)
         )
     }
 
     public static func write(_ value: DiagnosticFfi, into buf: inout [UInt8]) {
-        FfiConverterTypeFfiRange.write(value.range, into: &buf)
+        FfiConverterUInt32.write(value.start, into: &buf)
+        FfiConverterUInt32.write(value.end, into: &buf)
         FfiConverterString.write(value.severity, into: &buf)
         FfiConverterString.write(value.message, into: &buf)
-        FfiConverterString.write(value.source, into: &buf)
     }
 }
 
@@ -1672,6 +1198,92 @@ public func FfiConverterTypeHighlightFfi_lower(_ value: HighlightFfi) -> RustBuf
 }
 
 
+public struct RuntimeConfigFfi {
+    public var remote: Bool
+    public var serverUrl: String?
+    public var authToken: String?
+    public var localExecutable: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(remote: Bool, serverUrl: String?, authToken: String?, localExecutable: String?) {
+        self.remote = remote
+        self.serverUrl = serverUrl
+        self.authToken = authToken
+        self.localExecutable = localExecutable
+    }
+}
+
+#if compiler(>=6)
+extension RuntimeConfigFfi: Sendable {}
+#endif
+
+
+extension RuntimeConfigFfi: Equatable, Hashable {
+    public static func ==(lhs: RuntimeConfigFfi, rhs: RuntimeConfigFfi) -> Bool {
+        if lhs.remote != rhs.remote {
+            return false
+        }
+        if lhs.serverUrl != rhs.serverUrl {
+            return false
+        }
+        if lhs.authToken != rhs.authToken {
+            return false
+        }
+        if lhs.localExecutable != rhs.localExecutable {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(remote)
+        hasher.combine(serverUrl)
+        hasher.combine(authToken)
+        hasher.combine(localExecutable)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRuntimeConfigFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeConfigFfi {
+        return
+            try RuntimeConfigFfi(
+                remote: FfiConverterBool.read(from: &buf), 
+                serverUrl: FfiConverterOptionString.read(from: &buf), 
+                authToken: FfiConverterOptionString.read(from: &buf), 
+                localExecutable: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RuntimeConfigFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.remote, into: &buf)
+        FfiConverterOptionString.write(value.serverUrl, into: &buf)
+        FfiConverterOptionString.write(value.authToken, into: &buf)
+        FfiConverterOptionString.write(value.localExecutable, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeConfigFfi_lift(_ buf: RustBuffer) throws -> RuntimeConfigFfi {
+    return try FfiConverterTypeRuntimeConfigFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeConfigFfi_lower(_ value: RuntimeConfigFfi) -> RustBuffer {
+    return FfiConverterTypeRuntimeConfigFfi.lower(value)
+}
+
+
 public struct TextRangeFfi {
     public var start: UInt32
     public var end: UInt32
@@ -1744,98 +1356,12 @@ public func FfiConverterTypeTextRangeFfi_lower(_ value: TextRangeFfi) -> RustBuf
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum CompilationBackend {
-    
-    case auto
-    case local(executablePath: String?
-    )
-    case localWithInstall(installPath: String
-    )
-}
-
-
-#if compiler(>=6)
-extension CompilationBackend: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCompilationBackend: FfiConverterRustBuffer {
-    typealias SwiftType = CompilationBackend
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompilationBackend {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-        
-        case 1: return .auto
-        
-        case 2: return .local(executablePath: try FfiConverterOptionString.read(from: &buf)
-        )
-        
-        case 3: return .localWithInstall(installPath: try FfiConverterString.read(from: &buf)
-        )
-        
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: CompilationBackend, into buf: inout [UInt8]) {
-        switch value {
-        
-        
-        case .auto:
-            writeInt(&buf, Int32(1))
-        
-        
-        case let .local(executablePath):
-            writeInt(&buf, Int32(2))
-            FfiConverterOptionString.write(executablePath, into: &buf)
-            
-        
-        case let .localWithInstall(installPath):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(installPath, into: &buf)
-            
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompilationBackend_lift(_ buf: RustBuffer) throws -> CompilationBackend {
-    return try FfiConverterTypeCompilationBackend.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompilationBackend_lower(_ value: CompilationBackend) -> RustBuffer {
-    return FfiConverterTypeCompilationBackend.lower(value)
-}
-
-
-extension CompilationBackend: Equatable, Hashable {}
-
-
-
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-
 public enum RuntimeErrorFfi {
     
     case documentNotFound(uri: String
     )
     case lockPoisoned
-    case documentAccess(details: String
-    )
-    case parseError(details: String
-    )
     case compilationError(details: String
-    )
-    case ioError(details: String
     )
 }
 
@@ -1859,16 +1385,7 @@ public struct FfiConverterTypeRuntimeErrorFfi: FfiConverterRustBuffer {
         
         case 2: return .lockPoisoned
         
-        case 3: return .documentAccess(details: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 4: return .parseError(details: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 5: return .compilationError(details: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 6: return .ioError(details: try FfiConverterString.read(from: &buf)
+        case 3: return .compilationError(details: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -1888,23 +1405,8 @@ public struct FfiConverterTypeRuntimeErrorFfi: FfiConverterRustBuffer {
             writeInt(&buf, Int32(2))
         
         
-        case let .documentAccess(details):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(details, into: &buf)
-            
-        
-        case let .parseError(details):
-            writeInt(&buf, Int32(4))
-            FfiConverterString.write(details, into: &buf)
-            
-        
         case let .compilationError(details):
-            writeInt(&buf, Int32(5))
-            FfiConverterString.write(details, into: &buf)
-            
-        
-        case let .ioError(details):
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(3))
             FfiConverterString.write(details, into: &buf)
             
         }
@@ -1930,6 +1432,212 @@ public func FfiConverterTypeRuntimeErrorFfi_lower(_ value: RuntimeErrorFfi) -> R
 extension RuntimeErrorFfi: Equatable, Hashable {}
 
 
+
+
+
+
+public protocol LiveUpdateCallback: AnyObject, Sendable {
+    
+    func onHighlightsUpdated(uri: String, highlights: [HighlightFfi]) 
+    
+    func onDiagnosticsUpdated(uri: String, diagnostics: [DiagnosticFfi]) 
+    
+    func onCompilationCompleted(uri: String, result: CompileResultFfi) 
+    
+    func onError(error: RuntimeErrorFfi) 
+    
+}
+// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+private let IDX_CALLBACK_FREE: Int32 = 0
+// Callback return codes
+private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
+private let UNIFFI_CALLBACK_ERROR: Int32 = 1
+private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceLiveUpdateCallback {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfaceLiveUpdateCallback] = [UniffiVTableCallbackInterfaceLiveUpdateCallback(
+        onHighlightsUpdated: { (
+            uniffiHandle: UInt64,
+            uri: RustBuffer,
+            highlights: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceLiveUpdateCallback.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onHighlightsUpdated(
+                     uri: try FfiConverterString.lift(uri),
+                     highlights: try FfiConverterSequenceTypeHighlightFfi.lift(highlights)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onDiagnosticsUpdated: { (
+            uniffiHandle: UInt64,
+            uri: RustBuffer,
+            diagnostics: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceLiveUpdateCallback.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onDiagnosticsUpdated(
+                     uri: try FfiConverterString.lift(uri),
+                     diagnostics: try FfiConverterSequenceTypeDiagnosticFfi.lift(diagnostics)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onCompilationCompleted: { (
+            uniffiHandle: UInt64,
+            uri: RustBuffer,
+            result: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceLiveUpdateCallback.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onCompilationCompleted(
+                     uri: try FfiConverterString.lift(uri),
+                     result: try FfiConverterTypeCompileResultFfi_lift(result)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onError: { (
+            uniffiHandle: UInt64,
+            error: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceLiveUpdateCallback.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onError(
+                     error: try FfiConverterTypeRuntimeErrorFfi_lift(error)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceLiveUpdateCallback.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface LiveUpdateCallback: handle missing in uniffiFree")
+            }
+        }
+    )]
+}
+
+private func uniffiCallbackInitLiveUpdateCallback() {
+    uniffi_context_runtime_fn_init_callback_vtable_liveupdatecallback(UniffiCallbackInterfaceLiveUpdateCallback.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceLiveUpdateCallback {
+    fileprivate static let handleMap = UniffiHandleMap<LiveUpdateCallback>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceLiveUpdateCallback : FfiConverter {
+    typealias SwiftType = LiveUpdateCallback
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceLiveUpdateCallback_lift(_ handle: UInt64) throws -> LiveUpdateCallback {
+    return try FfiConverterCallbackInterfaceLiveUpdateCallback.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceLiveUpdateCallback_lower(_ v: LiveUpdateCallback) -> UInt64 {
+    return FfiConverterCallbackInterfaceLiveUpdateCallback.lower(v)
+}
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1958,8 +1666,8 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionTypeCompilationCallback: FfiConverterRustBuffer {
-    typealias SwiftType = CompilationCallback?
+fileprivate struct FfiConverterOptionTypeCompileResultFfi: FfiConverterRustBuffer {
+    typealias SwiftType = CompileResultFfi?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -1967,13 +1675,13 @@ fileprivate struct FfiConverterOptionTypeCompilationCallback: FfiConverterRustBu
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterTypeCompilationCallback.write(value, into: &buf)
+        FfiConverterTypeCompileResultFfi.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterTypeCompilationCallback.read(from: &buf)
+        case 1: return try FfiConverterTypeCompileResultFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -1982,7 +1690,7 @@ fileprivate struct FfiConverterOptionTypeCompilationCallback: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionTypeLiveUpdateCallback: FfiConverterRustBuffer {
+fileprivate struct FfiConverterOptionCallbackInterfaceLiveUpdateCallback: FfiConverterRustBuffer {
     typealias SwiftType = LiveUpdateCallback?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
@@ -1991,13 +1699,13 @@ fileprivate struct FfiConverterOptionTypeLiveUpdateCallback: FfiConverterRustBuf
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterTypeLiveUpdateCallback.write(value, into: &buf)
+        FfiConverterCallbackInterfaceLiveUpdateCallback.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterTypeLiveUpdateCallback.read(from: &buf)
+        case 1: return try FfiConverterCallbackInterfaceLiveUpdateCallback.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -2006,24 +1714,25 @@ fileprivate struct FfiConverterOptionTypeLiveUpdateCallback: FfiConverterRustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionDictionaryStringString: FfiConverterRustBuffer {
-    typealias SwiftType = [String: String]?
+fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
+    typealias SwiftType = [String]
 
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
-        guard let value = value else {
-            writeInt(&buf, Int8(0))
-            return
+    public static func write(_ value: [String], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterString.write(item, into: &buf)
         }
-        writeInt(&buf, Int8(1))
-        FfiConverterDictionaryStringString.write(value, into: &buf)
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
-        switch try readInt(&buf) as Int8 {
-        case 0: return nil
-        case 1: return try FfiConverterDictionaryStringString.read(from: &buf)
-        default: throw UniffiInternalError.unexpectedOptionalTag
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [String]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterString.read(from: &buf))
         }
+        return seq
     }
 }
 
@@ -2077,32 +1786,6 @@ fileprivate struct FfiConverterSequenceTypeHighlightFfi: FfiConverterRustBuffer 
     }
 }
 
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterDictionaryStringString: FfiConverterRustBuffer {
-    public static func write(_ value: [String: String], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for (key, value) in value {
-            FfiConverterString.write(key, into: &buf)
-            FfiConverterString.write(value, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String: String] {
-        let len: Int32 = try readInt(&buf)
-        var dict = [String: String]()
-        dict.reserveCapacity(Int(len))
-        for _ in 0..<len {
-            let key = try FfiConverterString.read(from: &buf)
-            let value = try FfiConverterString.read(from: &buf)
-            dict[key] = value
-        }
-        return dict
-    }
-}
-
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -2118,13 +1801,13 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_context_runtime_checksum_method_compilationcallback_on_progress() != 32286) {
+    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_cancel() != 36856) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_compilationcallback_on_compilation_complete() != 3057) {
+    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_is_ready() != 17883) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_compilationcallback_on_error() != 40674) {
+    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_poll_result() != 53559) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_cancel_compilation() != 33834) {
@@ -2133,13 +1816,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_close() != 33503) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_compile() != 30197) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_compile() != 2187) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_context_executable_exists() != 47389) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_context_executable_path() != 35759) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_active_jobs() != 20343) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_diagnostics() != 12217) {
@@ -2148,44 +1828,49 @@ private let initializationResult: InitializationResult = {
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_document_source() != 44195) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_document_uris() != 7948) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_highlights() != 5593) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_open() != 36700) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_notify_diagnostics_updated() != 32893) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_set_context_executable() != 48853) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_notify_error() != 16515) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_set_live_callback() != 41556) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_notify_highlights_updated() != 39971) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_set_working_directory() != 8278) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_open() != 16795) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_shutdown() != 17718) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_set_live_callback() != 56974) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_method_contextruntimehandle_update() != 26328) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_context_runtime_checksum_method_liveupdatecallback_on_diagnostics_updated() != 38298) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_context_runtime_checksum_method_liveupdatecallback_on_highlights_updated() != 34639) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_context_runtime_checksum_method_liveupdatecallback_on_error() != 11084) {
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_update() != 3438) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_context_runtime_checksum_constructor_contextruntimehandle_new() != 1461) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_context_runtime_checksum_constructor_contextruntimehandle_new_with_config() != 51844) {
+    if (uniffi_context_runtime_checksum_constructor_contextruntimehandle_new_with_config() != 23783) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_liveupdatecallback_on_highlights_updated() != 18557) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_liveupdatecallback_on_diagnostics_updated() != 28307) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_liveupdatecallback_on_compilation_completed() != 46638) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_liveupdatecallback_on_error() != 57446) {
         return InitializationResult.apiChecksumMismatch
     }
 
-    uniffiCallbackInitCompilationCallback()
     uniffiCallbackInitLiveUpdateCallback()
     return InitializationResult.ok
 }()
