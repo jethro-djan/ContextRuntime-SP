@@ -483,12 +483,6 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol AsyncCompilationFutureProtocol: AnyObject, Sendable {
     
-    func cancel()  -> Bool
-    
-    func isReady()  -> Bool
-    
-    func pollResult()  -> CompileResultFfi?
-    
 }
 open class AsyncCompilationFuture: AsyncCompilationFutureProtocol, @unchecked Sendable {
     fileprivate let pointer: UnsafeMutableRawPointer!
@@ -541,27 +535,6 @@ open class AsyncCompilationFuture: AsyncCompilationFutureProtocol, @unchecked Se
 
     
 
-    
-open func cancel() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_context_runtime_fn_method_asynccompilationfuture_cancel(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-open func isReady() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_context_runtime_fn_method_asynccompilationfuture_is_ready(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-open func pollResult() -> CompileResultFfi?  {
-    return try!  FfiConverterOptionTypeCompileResultFfi.lift(try! rustCall() {
-    uniffi_context_runtime_fn_method_asynccompilationfuture_poll_result(self.uniffiClonePointer(),$0
-    )
-})
-}
     
 
 }
@@ -628,6 +601,8 @@ public protocol ContextRuntimeHandleProtocol: AnyObject, Sendable {
     func close(uri: String) 
     
     func compile(uri: String)  -> String
+    
+    func compileAsync(uri: String)  -> AsyncCompilationFuture?
     
     func getActiveJobs()  -> [String]
     
@@ -737,6 +712,14 @@ open func close(uri: String)  {try! rustCall() {
 open func compile(uri: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_context_runtime_fn_method_contextruntimehandle_compile(self.uniffiClonePointer(),
+        FfiConverterString.lower(uri),$0
+    )
+})
+}
+    
+open func compileAsync(uri: String) -> AsyncCompilationFuture?  {
+    return try!  FfiConverterOptionTypeAsyncCompilationFuture.lift(try! rustCall() {
+    uniffi_context_runtime_fn_method_contextruntimehandle_compile_async(self.uniffiClonePointer(),
         FfiConverterString.lower(uri),$0
     )
 })
@@ -1666,8 +1649,8 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionTypeCompileResultFfi: FfiConverterRustBuffer {
-    typealias SwiftType = CompileResultFfi?
+fileprivate struct FfiConverterOptionTypeAsyncCompilationFuture: FfiConverterRustBuffer {
+    typealias SwiftType = AsyncCompilationFuture?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -1675,13 +1658,13 @@ fileprivate struct FfiConverterOptionTypeCompileResultFfi: FfiConverterRustBuffe
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterTypeCompileResultFfi.write(value, into: &buf)
+        FfiConverterTypeAsyncCompilationFuture.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterTypeCompileResultFfi.read(from: &buf)
+        case 1: return try FfiConverterTypeAsyncCompilationFuture.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -1801,15 +1784,6 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_cancel() != 36856) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_is_ready() != 17883) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_context_runtime_checksum_method_asynccompilationfuture_poll_result() != 53559) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_cancel_compilation() != 33834) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -1817,6 +1791,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_compile() != 2187) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_context_runtime_checksum_method_contextruntimehandle_compile_async() != 17751) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_context_runtime_checksum_method_contextruntimehandle_get_active_jobs() != 20343) {
