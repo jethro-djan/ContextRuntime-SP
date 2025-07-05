@@ -897,14 +897,16 @@ public func FfiConverterTypeContextRuntimeHandle_lower(_ value: ContextRuntimeHa
 
 
 public struct CompileRequestFfi {
-    public var fileName: String
+    public var uri: String
     public var content: String
+    public var format: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(fileName: String, content: String) {
-        self.fileName = fileName
+    public init(uri: String, content: String, format: String?) {
+        self.uri = uri
         self.content = content
+        self.format = format
     }
 }
 
@@ -915,18 +917,22 @@ extension CompileRequestFfi: Sendable {}
 
 extension CompileRequestFfi: Equatable, Hashable {
     public static func ==(lhs: CompileRequestFfi, rhs: CompileRequestFfi) -> Bool {
-        if lhs.fileName != rhs.fileName {
+        if lhs.uri != rhs.uri {
             return false
         }
         if lhs.content != rhs.content {
+            return false
+        }
+        if lhs.format != rhs.format {
             return false
         }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(fileName)
+        hasher.combine(uri)
         hasher.combine(content)
+        hasher.combine(format)
     }
 }
 
@@ -939,14 +945,16 @@ public struct FfiConverterTypeCompileRequestFfi: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompileRequestFfi {
         return
             try CompileRequestFfi(
-                fileName: FfiConverterString.read(from: &buf), 
-                content: FfiConverterString.read(from: &buf)
+                uri: FfiConverterString.read(from: &buf), 
+                content: FfiConverterString.read(from: &buf), 
+                format: FfiConverterOptionString.read(from: &buf)
         )
     }
 
     public static func write(_ value: CompileRequestFfi, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.fileName, into: &buf)
+        FfiConverterString.write(value.uri, into: &buf)
         FfiConverterString.write(value.content, into: &buf)
+        FfiConverterOptionString.write(value.format, into: &buf)
     }
 }
 
@@ -1529,6 +1537,8 @@ public enum RuntimeErrorFfi {
     case lockPoisoned
     case compilationError(details: String
     )
+    case unavailable(details: String
+    )
 }
 
 
@@ -1554,6 +1564,9 @@ public struct FfiConverterTypeRuntimeErrorFfi: FfiConverterRustBuffer {
         case 3: return .compilationError(details: try FfiConverterString.read(from: &buf)
         )
         
+        case 4: return .unavailable(details: try FfiConverterString.read(from: &buf)
+        )
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -1573,6 +1586,11 @@ public struct FfiConverterTypeRuntimeErrorFfi: FfiConverterRustBuffer {
         
         case let .compilationError(details):
             writeInt(&buf, Int32(3))
+            FfiConverterString.write(details, into: &buf)
+            
+        
+        case let .unavailable(details):
+            writeInt(&buf, Int32(4))
             FfiConverterString.write(details, into: &buf)
             
         }
