@@ -896,6 +896,162 @@ public func FfiConverterTypeContextRuntimeHandle_lower(_ value: ContextRuntimeHa
 
 
 
+public struct CompileRequestFfi {
+    public var fileName: String
+    public var content: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(fileName: String, content: String) {
+        self.fileName = fileName
+        self.content = content
+    }
+}
+
+#if compiler(>=6)
+extension CompileRequestFfi: Sendable {}
+#endif
+
+
+extension CompileRequestFfi: Equatable, Hashable {
+    public static func ==(lhs: CompileRequestFfi, rhs: CompileRequestFfi) -> Bool {
+        if lhs.fileName != rhs.fileName {
+            return false
+        }
+        if lhs.content != rhs.content {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(fileName)
+        hasher.combine(content)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCompileRequestFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompileRequestFfi {
+        return
+            try CompileRequestFfi(
+                fileName: FfiConverterString.read(from: &buf), 
+                content: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CompileRequestFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.fileName, into: &buf)
+        FfiConverterString.write(value.content, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompileRequestFfi_lift(_ buf: RustBuffer) throws -> CompileRequestFfi {
+    return try FfiConverterTypeCompileRequestFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompileRequestFfi_lower(_ value: CompileRequestFfi) -> RustBuffer {
+    return FfiConverterTypeCompileRequestFfi.lower(value)
+}
+
+
+public struct CompileResponseFfi {
+    public var success: Bool
+    public var pdfPath: String?
+    public var log: String
+    public var diagnostics: [DiagnosticFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(success: Bool, pdfPath: String?, log: String, diagnostics: [DiagnosticFfi]) {
+        self.success = success
+        self.pdfPath = pdfPath
+        self.log = log
+        self.diagnostics = diagnostics
+    }
+}
+
+#if compiler(>=6)
+extension CompileResponseFfi: Sendable {}
+#endif
+
+
+extension CompileResponseFfi: Equatable, Hashable {
+    public static func ==(lhs: CompileResponseFfi, rhs: CompileResponseFfi) -> Bool {
+        if lhs.success != rhs.success {
+            return false
+        }
+        if lhs.pdfPath != rhs.pdfPath {
+            return false
+        }
+        if lhs.log != rhs.log {
+            return false
+        }
+        if lhs.diagnostics != rhs.diagnostics {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(success)
+        hasher.combine(pdfPath)
+        hasher.combine(log)
+        hasher.combine(diagnostics)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCompileResponseFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompileResponseFfi {
+        return
+            try CompileResponseFfi(
+                success: FfiConverterBool.read(from: &buf), 
+                pdfPath: FfiConverterOptionString.read(from: &buf), 
+                log: FfiConverterString.read(from: &buf), 
+                diagnostics: FfiConverterSequenceTypeDiagnosticFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CompileResponseFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.success, into: &buf)
+        FfiConverterOptionString.write(value.pdfPath, into: &buf)
+        FfiConverterString.write(value.log, into: &buf)
+        FfiConverterSequenceTypeDiagnosticFfi.write(value.diagnostics, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompileResponseFfi_lift(_ buf: RustBuffer) throws -> CompileResponseFfi {
+    return try FfiConverterTypeCompileResponseFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompileResponseFfi_lower(_ value: CompileResponseFfi) -> RustBuffer {
+    return FfiConverterTypeCompileResponseFfi.lower(value)
+}
+
+
 public struct CompileResultFfi {
     public var success: Bool
     public var pdfPath: String?
