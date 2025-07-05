@@ -974,92 +974,6 @@ public func FfiConverterTypeCompileRequestFfi_lower(_ value: CompileRequestFfi) 
 }
 
 
-public struct CompileResponseFfi {
-    public var success: Bool
-    public var pdfPath: String?
-    public var log: String
-    public var diagnostics: [DiagnosticFfi]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(success: Bool, pdfPath: String?, log: String, diagnostics: [DiagnosticFfi]) {
-        self.success = success
-        self.pdfPath = pdfPath
-        self.log = log
-        self.diagnostics = diagnostics
-    }
-}
-
-#if compiler(>=6)
-extension CompileResponseFfi: Sendable {}
-#endif
-
-
-extension CompileResponseFfi: Equatable, Hashable {
-    public static func ==(lhs: CompileResponseFfi, rhs: CompileResponseFfi) -> Bool {
-        if lhs.success != rhs.success {
-            return false
-        }
-        if lhs.pdfPath != rhs.pdfPath {
-            return false
-        }
-        if lhs.log != rhs.log {
-            return false
-        }
-        if lhs.diagnostics != rhs.diagnostics {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(success)
-        hasher.combine(pdfPath)
-        hasher.combine(log)
-        hasher.combine(diagnostics)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCompileResponseFfi: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompileResponseFfi {
-        return
-            try CompileResponseFfi(
-                success: FfiConverterBool.read(from: &buf), 
-                pdfPath: FfiConverterOptionString.read(from: &buf), 
-                log: FfiConverterString.read(from: &buf), 
-                diagnostics: FfiConverterSequenceTypeDiagnosticFfi.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: CompileResponseFfi, into buf: inout [UInt8]) {
-        FfiConverterBool.write(value.success, into: &buf)
-        FfiConverterOptionString.write(value.pdfPath, into: &buf)
-        FfiConverterString.write(value.log, into: &buf)
-        FfiConverterSequenceTypeDiagnosticFfi.write(value.diagnostics, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompileResponseFfi_lift(_ buf: RustBuffer) throws -> CompileResponseFfi {
-    return try FfiConverterTypeCompileResponseFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompileResponseFfi_lower(_ value: CompileResponseFfi) -> RustBuffer {
-    return FfiConverterTypeCompileResponseFfi.lower(value)
-}
-
-
 public struct CompileResultFfi {
     public var success: Bool
     public var pdfPath: String?
@@ -1147,14 +1061,14 @@ public func FfiConverterTypeCompileResultFfi_lower(_ value: CompileResultFfi) ->
 
 
 public struct DiagnosticFfi {
-    public var start: UInt32
-    public var end: UInt32
+    public var start: UInt32?
+    public var end: UInt32?
     public var severity: String
     public var message: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(start: UInt32, end: UInt32, severity: String, message: String) {
+    public init(start: UInt32?, end: UInt32?, severity: String, message: String) {
         self.start = start
         self.end = end
         self.severity = severity
@@ -1201,16 +1115,16 @@ public struct FfiConverterTypeDiagnosticFfi: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DiagnosticFfi {
         return
             try DiagnosticFfi(
-                start: FfiConverterUInt32.read(from: &buf), 
-                end: FfiConverterUInt32.read(from: &buf), 
+                start: FfiConverterOptionUInt32.read(from: &buf), 
+                end: FfiConverterOptionUInt32.read(from: &buf), 
                 severity: FfiConverterString.read(from: &buf), 
                 message: FfiConverterString.read(from: &buf)
         )
     }
 
     public static func write(_ value: DiagnosticFfi, into buf: inout [UInt8]) {
-        FfiConverterUInt32.write(value.start, into: &buf)
-        FfiConverterUInt32.write(value.end, into: &buf)
+        FfiConverterOptionUInt32.write(value.start, into: &buf)
+        FfiConverterOptionUInt32.write(value.end, into: &buf)
         FfiConverterString.write(value.severity, into: &buf)
         FfiConverterString.write(value.message, into: &buf)
     }
@@ -1821,6 +1735,30 @@ public func FfiConverterCallbackInterfaceLiveUpdateCallback_lift(_ handle: UInt6
 #endif
 public func FfiConverterCallbackInterfaceLiveUpdateCallback_lower(_ v: LiveUpdateCallback) -> UInt64 {
     return FfiConverterCallbackInterfaceLiveUpdateCallback.lower(v)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
 }
 
 #if swift(>=5.8)

@@ -18,7 +18,7 @@ let package = Package(
     ],
     dependencies: [ ],
     targets: [
-        .binaryTarget(name: "ContextFFI", url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.38/ContextFFI.xcframework.zip", checksum: "ec784a4d80430b738589ad4f4fb86f1b4ca61b54c2ed1abb5d53ac8a31c17194"),
+        .binaryTarget(name: "ContextFFI", url: "https://github.com/jethro-djan/ContextRuntime-SP/releases/download/v0.0.40/ContextFFI.xcframework.zip", checksum: "b184572eae5c8d3adee08a8912a23d5021da69e02c39ae155ae86ea49f4d626f"),
         .target(
             name: "ContextRuntime",
             dependencies: [
